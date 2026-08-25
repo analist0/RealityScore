@@ -48,6 +48,7 @@ export function HelpAssistant({ nudge }: { nudge: boolean }) {
   }, []);
 
   async function ask(question: string) {
+    if (pending) return;
     const text = question.trim();
     if (!text) return;
     setMessages((m) => [...m, { role: "user", text }]);
@@ -103,7 +104,7 @@ export function HelpAssistant({ nudge }: { nudge: boolean }) {
           </div>
           <div className="help-input-row">
             {speechSupported && <button type="button" className={`mic ${listening ? "listening" : ""}`} onClick={startListening} disabled={listening} aria-label="שאלה בקול">🎤</button>}
-            <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") ask(input); }} placeholder="הקלידו שאלה על השימוש באתר..." />
+            <input value={input} disabled={pending} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") ask(input); }} placeholder="הקלידו שאלה על השימוש באתר..." />
             <button type="button" className="primary" onClick={() => ask(input)} disabled={pending}>שלח</button>
           </div>
         </section>
