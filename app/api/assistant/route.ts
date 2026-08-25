@@ -10,6 +10,10 @@ const RATE_LIMIT_PER_MINUTE = 12;
 // per-IP rate limit alone doesn't stop one permitted request from carrying
 // an arbitrarily large body up to the platform's HTTP limit.
 const MAX_MESSAGE_LENGTH = 1000;
+// Without this, omitting maxTokens lets each provider fall back to its own
+// (potentially large) default — the input-length cap and per-IP rate limit
+// don't bound the cost of the generated side of the request at all.
+const MAX_OUTPUT_TOKENS = 500;
 
 // System prompts are server-owned per scope, never taken from the request
 // body: a public caller could otherwise pass any `system` text alongside
@@ -76,7 +80,7 @@ export async function POST(request: Request) {
       : [{ role: "user" as const, content: message }];
 
     const router = createLLMRouter(providers);
-    const result = await router.chat({ messages });
+    const result = await router.chat({ messages, maxTokens: MAX_OUTPUT_TOKENS });
 
     // Cache write is best-effort too: a successful generation should still
     // reach the user even if persisting it for next time fails.

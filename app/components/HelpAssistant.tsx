@@ -46,6 +46,12 @@ export function HelpAssistant({ nudge }: { nudge: boolean }) {
   // and shared across every closure, so reading pendingRef.current instead
   // always sees the live state regardless of which render's `ask` runs.
   const pendingRef = useRef(false);
+  // Same staleness problem as pendingRef, for a different closure: the
+  // async ask() continuation below reads `open` from whichever render it
+  // started in. If the panel is closed while a request is still pending,
+  // that continuation would otherwise still speak the reply out loud after
+  // the user has left. Kept in sync via the effect right below.
+  const openRef = useRef(false);
   // Starts false on both server and initial client render so hydration
   // matches; the real value (browser-only) is picked up right after mount.
   const [speechSupported, setSpeechSupported] = useState(false);
@@ -60,6 +66,10 @@ export function HelpAssistant({ nudge }: { nudge: boolean }) {
     });
     return () => { recognitionRef.current?.stop(); };
   }, []);
+
+  useEffect(() => {
+    openRef.current = open;
+  }, [open]);
 
   async function ask(question: string) {
     if (pendingRef.current) return;
@@ -79,7 +89,7 @@ export function HelpAssistant({ nudge }: { nudge: boolean }) {
       if (!data.reply) console.error("assistant error:", data.error);
       const reply = data.reply ?? "לא הצלחתי לענות כרגע, נסו שוב עוד רגע.";
       setMessages((m) => [...m, { role: "assistant", text: reply }]);
-      speak(reply);
+      if (openRef.current) speak(reply);
     } catch {
       const reply = "יש בעיית תקשורת. נסו שוב עוד רגע.";
       setMessages((m) => [...m, { role: "assistant", text: reply }]);
@@ -138,7 +148,7 @@ export function HelpAssistant({ nudge }: { nudge: boolean }) {
           </div>
         </section>
       )}
-      <button type="button" className="help-fab" onClick={() => setOpen((v) => !v)} aria-label="עזרה">
+      <button type="button" className="help-fab" onClick={() => (open ? closePanel() : setOpen(true))} aria-label="עזרה">
         {nudge && !open ? "נתקעת? 🤔" : "?"}
       </button>
     </div>
