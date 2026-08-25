@@ -82,12 +82,22 @@ export async function POST(request: Request) {
     const router = createLLMRouter(providers);
     const result = await router.chat({ messages, maxTokens: MAX_OUTPUT_TOKENS });
 
-    // Cache write is best-effort too: a successful generation should still
-    // reach the user even if persisting it for next time fails.
-    try {
-      await recordAnswer(db, message, result.text, { scope, sourceProvider: result.provider });
-    } catch (error) {
-      console.error("answer-bank write failed (reply still returned):", error);
+    // Only persist replies from a registered, constrained scope. The cache
+    // is shared and fuzzy-matched — a later unrelated caller can retrieve
+    // any entry with a similar-enough question — so caching the unscoped
+    // default (no system prompt, no constraint on what gets asked or
+    // echoed back) risks leaking one caller's personal details to another.
+    // A registered scope's system prompt keeps answers generic by design
+    // (e.g. "help" is restricted to app-navigation questions only); that's
+    // not a hard guarantee against every possible echo, but it's the real
+    // mitigation available without per-user cache partitioning, which
+    // would defeat the point of a shared cache.
+    if (system) {
+      try {
+        await recordAnswer(db, message, result.text, { scope, sourceProvider: result.provider });
+      } catch (error) {
+        console.error("answer-bank write failed (reply still returned):", error);
+      }
     }
 
     return Response.json({ reply: result.text, source: result.provider });

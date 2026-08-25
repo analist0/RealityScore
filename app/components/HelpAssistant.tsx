@@ -108,6 +108,10 @@ export function HelpAssistant({ nudge }: { nudge: boolean }) {
       recognitionRef.current.stop();
       recognitionRef.current = null;
     }
+    // The openRef guard above only stops a reply that hasn't started
+    // speaking yet — an utterance already in progress (or queued) keeps
+    // playing through speechSynthesis unless explicitly cancelled here.
+    if (typeof window !== "undefined") window.speechSynthesis?.cancel();
     setListening(false);
     setOpen(false);
   }
