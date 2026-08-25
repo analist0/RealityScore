@@ -38,6 +38,14 @@ export function HelpAssistant({ nudge }: { nudge: boolean }) {
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const recognitionRef = useRef<MinimalSpeechRecognition | null>(null);
+  // recognition.onresult is a long-lived callback set once in
+  // startListening() — it closes over whatever `ask` (and therefore
+  // `pending`) existed at that render. If a typed submission starts and
+  // flips `pending` to true afterward, that stale closure's `if (pending)`
+  // check still reads the old, captured value. A ref is mutated in place
+  // and shared across every closure, so reading pendingRef.current instead
+  // always sees the live state regardless of which render's `ask` runs.
+  const pendingRef = useRef(false);
   // Starts false on both server and initial client render so hydration
   // matches; the real value (browser-only) is picked up right after mount.
   const [speechSupported, setSpeechSupported] = useState(false);
@@ -54,11 +62,12 @@ export function HelpAssistant({ nudge }: { nudge: boolean }) {
   }, []);
 
   async function ask(question: string) {
-    if (pending) return;
+    if (pendingRef.current) return;
     const text = question.trim();
     if (!text) return;
     setMessages((m) => [...m, { role: "user", text }]);
     setInput("");
+    pendingRef.current = true;
     setPending(true);
     try {
       const res = await fetch("/api/assistant", {
@@ -75,6 +84,7 @@ export function HelpAssistant({ nudge }: { nudge: boolean }) {
       const reply = "יש בעיית תקשורת. נסו שוב עוד רגע.";
       setMessages((m) => [...m, { role: "assistant", text: reply }]);
     } finally {
+      pendingRef.current = false;
       setPending(false);
     }
   }
