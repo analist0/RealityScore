@@ -24,6 +24,7 @@ export default function Home() {
   function closeReview(){setSelected(null);setStuckOnReview(false)}
   function bumpStep(fn:(s:number)=>number){setStuckOnReview(false);setStep(fn)}
   function bumpAnswers(fn:(a:string[])=>string[]){setStuckOnReview(false);setAnswers(fn)}
+  function bumpFiles(f:File[]){setStuckOnReview(false);setFiles(f)}
   async function submitReview(){if(!selected)return;setStuckOnReview(false);setSubmitting(true);const form=new FormData();form.set("businessId",selected.id);form.set("businessName",selected.name);form.set("answers",JSON.stringify(answers));files.forEach(f=>form.append("evidence",f));try{await fetch("/api/reviews",{method:"POST",body:form})}finally{setSubmitting(false);setSubmitted(true)}}
 
   return <main dir="rtl">
@@ -51,8 +52,8 @@ export default function Home() {
         <Reveal delay={200}><article><span>03</span><h3>האם העסק פתר?</h3><p>תגובה מהירה ותיקון אמיתי משפרים את הציון. עסק לא יכול לשלם כדי למחוק ביקורת.</p></article></Reveal>
       </div>
     </section>
-    {selected&&!submitted&&!submitting&&<IdleNudge key={`${step}:${answers.join("|")}`} delayMs={20000} onIdle={()=>setStuckOnReview(true)}/>}
+    {selected&&!submitted&&!submitting&&<IdleNudge key={`${step}:${answers.join("|")}:${files.length}`} delayMs={20000} onIdle={()=>setStuckOnReview(true)}/>}
     <HelpAssistant nudge={stuckOnReview}/>
-    {selected&&<ReviewModal selected={selected} step={step} setStep={bumpStep} answers={answers} setAnswers={bumpAnswers} files={files} setFiles={setFiles} submitting={submitting} submitted={submitted} submitReview={submitReview} onClose={closeReview}/>}
+    {selected&&<ReviewModal selected={selected} step={step} setStep={bumpStep} answers={answers} setAnswers={bumpAnswers} files={files} setFiles={bumpFiles} submitting={submitting} submitted={submitted} submitReview={submitReview} onClose={closeReview}/>}
   </main>
 }

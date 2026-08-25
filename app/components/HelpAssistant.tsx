@@ -108,9 +108,13 @@ export function HelpAssistant({ nudge }: { nudge: boolean }) {
       recognitionRef.current.stop();
       recognitionRef.current = null;
     }
-    // The openRef guard above only stops a reply that hasn't started
-    // speaking yet — an utterance already in progress (or queued) keeps
-    // playing through speechSynthesis unless explicitly cancelled here.
+    // Set synchronously, not left to the `openRef.current = open` effect:
+    // that effect only runs after this render commits, so a pending ask()
+    // continuation settling in the gap between this call and that effect
+    // would still see the stale `true` and start speaking after dismissal.
+    openRef.current = false;
+    // An utterance already in progress (or queued) keeps playing through
+    // speechSynthesis unless explicitly cancelled here.
     if (typeof window !== "undefined") window.speechSynthesis?.cancel();
     setListening(false);
     setOpen(false);
