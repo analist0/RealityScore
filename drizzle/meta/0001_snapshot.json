@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "28ef42a6-a474-4d3f-883b-f621d07551f0",
+  "id": "e02be372-e97b-4e65-84a3-41be43019772",
   "prevId": "4b165796-6f82-4bce-9f65-3528a00b3b33",
   "tables": {
     "answer_bank": {
@@ -13,6 +13,14 @@
           "primaryKey": true,
           "notNull": true,
           "autoincrement": true
+        },
+        "scope": {
+          "name": "scope",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'general'"
         },
         "question_normalized": {
           "name": "question_normalized",

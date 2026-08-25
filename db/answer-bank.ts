@@ -1,4 +1,4 @@
-import { sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { answerBank } from "./schema";
 import type { getDb } from "./index";
 
@@ -31,6 +31,7 @@ export function similarity(a: string, b: string): number {
 }
 
 export const DEFAULT_MATCH_THRESHOLD = 0.6;
+export const DEFAULT_SCOPE = "general";
 
 export type CachedAnswer = {
   id: number;
@@ -39,18 +40,25 @@ export type CachedAnswer = {
   score: number;
 };
 
-// Scans the full bank client-side. Fine at MVP scale (hundreds of rows);
-// swap for a Cloudflare Vectorize similarity search if the bank grows large
-// enough that a full-table scan per lookup becomes a real cost.
+// Scans candidates within `scope` client-side. Fine at MVP scale (hundreds
+// of rows per scope); swap for a Cloudflare Vectorize similarity search if
+// the bank grows large enough that a per-scope scan becomes a real cost.
+//
+// `scope` is a real column (not folded into the question text) — Jaccard
+// similarity is unweighted token overlap, so a scope tag mixed into the
+// text would just be one more token among many and would NOT reliably
+// keep two callers' cached answers apart. Filtering by an actual column
+// before scoring is what makes the isolation real.
 export async function findCachedAnswer(
   db: ReturnType<typeof getDb>,
   question: string,
+  scope: string = DEFAULT_SCOPE,
   threshold = DEFAULT_MATCH_THRESHOLD,
 ): Promise<CachedAnswer | null> {
   const normalized = normalizeQuestion(question);
   if (!normalized) return null;
 
-  const rows = await db.select().from(answerBank).all();
+  const rows = await db.select().from(answerBank).where(eq(answerBank.scope, scope)).all();
   let best: CachedAnswer | null = null;
   for (const row of rows) {
     const score = similarity(normalized, row.questionNormalized);
@@ -59,7 +67,7 @@ export async function findCachedAnswer(
     }
   }
   if (best) {
-    await db.update(answerBank).set({ hitCount: sql`${answerBank.hitCount} + 1`, updatedAt: sql`CURRENT_TIMESTAMP` }).where(sql`${answerBank.id} = ${best.id}`);
+    await db.update(answerBank).set({ hitCount: sql`${answerBank.hitCount} + 1`, updatedAt: sql`CURRENT_TIMESTAMP` }).where(and(eq(answerBank.id, best.id), eq(answerBank.scope, scope)));
   }
   return best;
 }
@@ -68,12 +76,13 @@ export async function recordAnswer(
   db: ReturnType<typeof getDb>,
   question: string,
   answerText: string,
-  opts: { audioObjectKey?: string; sourceProvider?: string } = {},
+  opts: { scope?: string; audioObjectKey?: string; sourceProvider?: string } = {},
 ) {
   const normalized = normalizeQuestion(question);
   const [row] = await db
     .insert(answerBank)
     .values({
+      scope: opts.scope ?? DEFAULT_SCOPE,
       questionNormalized: normalized,
       questionRaw: question.trim().slice(0, 2000),
       answerText: answerText.trim().slice(0, 8000),
