@@ -10,3 +10,9 @@ CREATE TABLE `answer_bank` (
 	`created_at` text DEFAULT CURRENT_TIMESTAMP NOT NULL,
 	`updated_at` text DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
+--> statement-breakpoint
+CREATE UNIQUE INDEX `answer_bank_scope_question_idx` ON `answer_bank` (`scope`,`question_normalized`);--> statement-breakpoint
+CREATE TABLE `rate_limit_hits` (
+	`bucket_key` text PRIMARY KEY NOT NULL,
+	`count` integer DEFAULT 0 NOT NULL
+);

@@ -13,5 +13,5 @@ export function createGeminiProvider(apiKey: string, model = "gemini-2.5-flash",
 }
 
 export function createOllamaCloudProvider(apiKey: string, model = "llama3.3", fetchImpl?: typeof fetch): LLMProvider {
-  return createOpenAICompatibleProvider({ name: "ollama-cloud", baseUrl: "https://ollama.com/api", apiKey, model, fetchImpl });
+  return createOpenAICompatibleProvider({ name: "ollama-cloud", baseUrl: "https://ollama.com/v1", apiKey, model, fetchImpl });
 }

@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "e02be372-e97b-4e65-84a3-41be43019772",
+  "id": "8fe702b3-edc4-4110-94b8-419b3fd0e6b6",
   "prevId": "4b165796-6f82-4bce-9f65-3528a00b3b33",
   "tables": {
     "answer_bank": {
@@ -82,7 +82,16 @@
           "default": "CURRENT_TIMESTAMP"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "answer_bank_scope_question_idx": {
+          "name": "answer_bank_scope_question_idx",
+          "columns": [
+            "scope",
+            "question_normalized"
+          ],
+          "isUnique": true
+        }
+      },
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
@@ -216,6 +225,31 @@
           "notNull": true,
           "autoincrement": false,
           "default": "CURRENT_TIMESTAMP"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "rate_limit_hits": {
+      "name": "rate_limit_hits",
+      "columns": {
+        "bucket_key": {
+          "name": "bucket_key",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "count": {
+          "name": "count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
         }
       },
       "indexes": {},

@@ -3,6 +3,9 @@ import { getDb } from "../../../db";
 import { DEFAULT_SCOPE, findCachedAnswer, recordAnswer } from "../../../db/answer-bank";
 import { getConfiguredProviders } from "../../../lib/llm/config";
 import { createLLMRouter } from "../../../lib/llm/router";
+import { checkRateLimit } from "../../../lib/rate-limit";
+
+const RATE_LIMIT_PER_MINUTE = 12;
 
 // Single entry point for anything that needs an LLM reply (in-app help,
 // and later the voice assistant / phone webhook): check the answer bank
@@ -18,11 +21,26 @@ export async function POST(request: Request) {
     if (!message) return Response.json({ error: "message is required" }, { status: 400 });
 
     const scope = body.scope?.trim() || DEFAULT_SCOPE;
-
     const db = getDb();
-    const cached = await findCachedAnswer(db, message, scope);
-    if (cached) {
-      return Response.json({ reply: cached.answerText, source: "cache", score: cached.score });
+
+    // This route is publicly reachable and cache misses trigger paid LLM
+    // calls — bound abuse with a per-IP fixed-window limit before doing
+    // anything else.
+    const clientIp = request.headers.get("cf-connecting-ip") ?? "unknown";
+    const withinLimit = await checkRateLimit(db, `assistant:${clientIp}`, RATE_LIMIT_PER_MINUTE);
+    if (!withinLimit) {
+      return Response.json({ error: "too many requests — try again in a moment" }, { status: 429 });
+    }
+
+    // Cache read is best-effort: a D1 hiccup here should fall through to
+    // the LLM, not take the whole assistant down.
+    try {
+      const cached = await findCachedAnswer(db, message, scope);
+      if (cached) {
+        return Response.json({ reply: cached.answerText, source: "cache", score: cached.score });
+      }
+    } catch (error) {
+      console.error("answer-bank lookup failed, falling through to LLM:", error);
     }
 
     const providers = getConfiguredProviders(env);
@@ -39,7 +57,14 @@ export async function POST(request: Request) {
 
     const router = createLLMRouter(providers);
     const result = await router.chat({ messages });
-    await recordAnswer(db, message, result.text, { scope, sourceProvider: result.provider });
+
+    // Cache write is best-effort too: a successful generation should still
+    // reach the user even if persisting it for next time fails.
+    try {
+      await recordAnswer(db, message, result.text, { scope, sourceProvider: result.provider });
+    } catch (error) {
+      console.error("answer-bank write failed (reply still returned):", error);
+    }
 
     return Response.json({ reply: result.text, source: result.provider });
   } catch (error) {

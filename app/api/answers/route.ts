@@ -1,3 +1,4 @@
+import { env } from "cloudflare:workers";
 import { getDb } from "../../../db";
 import { DEFAULT_SCOPE, findCachedAnswer, recordAnswer } from "../../../db/answer-bank";
 
@@ -25,8 +26,20 @@ export async function GET(request: Request) {
   }
 }
 
+// Writes are restricted to trusted server-side callers: this is a raw
+// cache-seed endpoint with no LLM/moderation in the loop, so an open POST
+// would let anyone plant an arbitrary "cached answer" for any question
+// (cache poisoning). Requires an INTERNAL_API_SECRET Workers secret and a
+// matching `x-internal-secret` header — fails closed if the secret isn't
+// configured. GET stays open: reading a cached answer isn't sensitive the
+// way writing one is.
 export async function POST(request: Request) {
   try {
+    const secret = env.INTERNAL_API_SECRET;
+    if (!secret || request.headers.get("x-internal-secret") !== secret) {
+      return Response.json({ error: "unauthorized" }, { status: 401 });
+    }
+
     const body = (await request.json()) as { question?: string; answer?: string; scope?: string; audioObjectKey?: string; sourceProvider?: string };
     const question = body.question?.trim() ?? "";
     const answer = body.answer?.trim() ?? "";
