@@ -1,24 +1,31 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { businesses, type Business } from "./data";
+import { businesses, questions, type Business } from "./data";
 import { BusinessCard } from "./components/BusinessCard";
 import { Gallery } from "./components/Gallery";
 import { ReviewModal } from "./components/ReviewModal";
 import { Reveal } from "./components/Reveal";
+import { HelpAssistant } from "./components/HelpAssistant";
+import { IdleNudge } from "./components/IdleNudge";
 
 export default function Home() {
   const [query,setQuery]=useState("כלנית");
   const [locationEnabled,setLocationEnabled]=useState(false);
   const [selected,setSelected]=useState<Business|null>(null);
   const [step,setStep]=useState(0);
-  const [answers,setAnswers]=useState<string[]>(Array(5).fill(""));
+  const [answers,setAnswers]=useState<string[]>(Array(questions.length).fill(""));
   const [files,setFiles]=useState<File[]>([]);
   const [submitting,setSubmitting]=useState(false);
   const [submitted,setSubmitted]=useState(false);
+  const [stuckOnReview,setStuckOnReview]=useState(false);
   const results=useMemo(()=>{const q=query.trim().toLowerCase();return !q?businesses:businesses.filter(b=>[b.name,b.type,b.area,...b.tags].join(" ").toLowerCase().includes(q))},[query]);
-  function openReview(b:Business){setSelected(b);setStep(0);setAnswers(Array(5).fill(""));setFiles([]);setSubmitted(false)}
-  async function submitReview(){if(!selected)return;setSubmitting(true);const form=new FormData();form.set("businessId",selected.id);form.set("businessName",selected.name);form.set("answers",JSON.stringify(answers));files.forEach(f=>form.append("evidence",f));try{await fetch("/api/reviews",{method:"POST",body:form})}finally{setSubmitting(false);setSubmitted(true)}}
+  function openReview(b:Business){setSelected(b);setStep(0);setAnswers(Array(questions.length).fill(""));setFiles([]);setSubmitted(false);setStuckOnReview(false)}
+  function closeReview(){setSelected(null);setStuckOnReview(false)}
+  function bumpStep(fn:(s:number)=>number){setStuckOnReview(false);setStep(fn)}
+  function bumpAnswers(fn:(a:string[])=>string[]){setStuckOnReview(false);setAnswers(fn)}
+  function bumpFiles(f:File[]){setStuckOnReview(false);setFiles(f)}
+  async function submitReview(){if(!selected)return;setStuckOnReview(false);setSubmitting(true);const form=new FormData();form.set("businessId",selected.id);form.set("businessName",selected.name);form.set("answers",JSON.stringify(answers));files.forEach(f=>form.append("evidence",f));try{await fetch("/api/reviews",{method:"POST",body:form})}finally{setSubmitting(false);setSubmitted(true)}}
 
   return <main dir="rtl">
     <header className="topbar"><a className="brand" href="#top"><span className="brand-mark">R</span><span>RealityScore</span><small>מה הובטח. מה קיבלת.</small></a><nav><a href="#results">מקומות</a><a href="#gallery">גלריה</a><a href="#method">איך זה עובד</a><button className="ghost-button" onClick={()=>results[0]&&openReview(results[0])}>כתיבת ביקורת</button></nav></header>
@@ -45,6 +52,8 @@ export default function Home() {
         <Reveal delay={200}><article><span>03</span><h3>האם העסק פתר?</h3><p>תגובה מהירה ותיקון אמיתי משפרים את הציון. עסק לא יכול לשלם כדי למחוק ביקורת.</p></article></Reveal>
       </div>
     </section>
-    {selected&&<ReviewModal selected={selected} step={step} setStep={setStep} answers={answers} setAnswers={setAnswers} files={files} setFiles={setFiles} submitting={submitting} submitted={submitted} submitReview={submitReview} onClose={()=>setSelected(null)}/>}
+    {selected&&!submitted&&!submitting&&<IdleNudge key={`${step}:${answers.join("|")}:${files.length}`} delayMs={20000} onIdle={()=>setStuckOnReview(true)}/>}
+    <HelpAssistant nudge={stuckOnReview}/>
+    {selected&&<ReviewModal selected={selected} step={step} setStep={bumpStep} answers={answers} setAnswers={bumpAnswers} files={files} setFiles={bumpFiles} submitting={submitting} submitted={submitted} submitReview={submitReview} onClose={closeReview}/>}
   </main>
 }
