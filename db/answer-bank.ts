@@ -37,6 +37,13 @@ function isNegated(tokens: Set<string>): boolean {
   return false;
 }
 
+// Known limitation, not fixed here: antonym pairs that share no lexical
+// marker (e.g. "...ביקורת חיובית" vs "...ביקורת שלילית" — positive vs
+// negative review) can still score above DEFAULT_MATCH_THRESHOLD, since
+// nothing in the token sets themselves signals "these are opposites" the
+// way a negation marker does. Fixing this generally needs real semantic
+// understanding (embeddings), not more token-overlap heuristics — see the
+// Vectorize note on findCachedAnswer below.
 export function similarity(a: string, b: string): number {
   const setA = tokenSet(a);
   const setB = tokenSet(b);
