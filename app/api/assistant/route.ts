@@ -43,7 +43,12 @@ export async function POST(request: Request) {
     }
 
     const requestedScope = body.scope?.trim() || DEFAULT_SCOPE;
-    const scope = requestedScope === DEFAULT_SCOPE || requestedScope in SYSTEM_PROMPTS ? requestedScope : DEFAULT_SCOPE;
+    // `in` also matches inherited Object.prototype properties (e.g.
+    // scope: "toString" or "__proto__"), which would let a crafted scope
+    // pass this check yet resolve to a function/object below instead of a
+    // registered prompt string. Object.hasOwn checks only the object's own
+    // keys, so an inherited name always falls through to the safe default.
+    const scope = requestedScope === DEFAULT_SCOPE || Object.hasOwn(SYSTEM_PROMPTS, requestedScope) ? requestedScope : DEFAULT_SCOPE;
     const db = getDb();
 
     // This route is publicly reachable and cache misses trigger paid LLM
