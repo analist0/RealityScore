@@ -92,7 +92,13 @@ export async function findCachedAnswer(
     }
   }
   if (best) {
-    await db.update(answerBank).set({ hitCount: sql`${answerBank.hitCount} + 1`, updatedAt: sql`CURRENT_TIMESTAMP` }).where(and(eq(answerBank.id, best.id), eq(answerBank.scope, scope)));
+    // Hit-count accounting is nonessential: a transient write failure here
+    // must not turn an already-found cache hit into an apparent miss.
+    try {
+      await db.update(answerBank).set({ hitCount: sql`${answerBank.hitCount} + 1`, updatedAt: sql`CURRENT_TIMESTAMP` }).where(and(eq(answerBank.id, best.id), eq(answerBank.scope, scope)));
+    } catch (error) {
+      console.error("answer-bank hit-count update failed (cache hit still returned):", error);
+    }
   }
   return best;
 }

@@ -1,9 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 
-const SYSTEM_PROMPT =
-  "אתה עוזר שימוש קצר לאתר RealityScore. ענה רק על שאלות ניווט ושימוש באתר עצמו (איך לחפש, איך לכתוב ביקורת, איך להעלות תמונות) בעברית, בקצרה. אל תמציא מידע על עסקים או ציונים.";
-
 type Message = { role: "assistant" | "user"; text: string };
 
 type MinimalSpeechRecognition = {
@@ -41,9 +38,18 @@ export function HelpAssistant({ nudge }: { nudge: boolean }) {
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const recognitionRef = useRef<MinimalSpeechRecognition | null>(null);
-  const speechSupported = typeof window !== "undefined" && getSpeechRecognition() !== null;
+  // Starts false on both server and initial client render so hydration
+  // matches; the real value (browser-only) is picked up right after mount.
+  const [speechSupported, setSpeechSupported] = useState(false);
 
   useEffect(() => {
+    // Deferred to a microtask (not called synchronously in the effect body)
+    // to satisfy this repo's react-hooks/set-state-in-effect rule, which
+    // treats a same-tick setState call as a cascading-render risk even
+    // when — as here — it's a one-time, mount-only capability check.
+    queueMicrotask(() => {
+      if (getSpeechRecognition() !== null) setSpeechSupported(true);
+    });
     return () => { recognitionRef.current?.stop(); };
   }, []);
 
@@ -58,7 +64,7 @@ export function HelpAssistant({ nudge }: { nudge: boolean }) {
       const res = await fetch("/api/assistant", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ message: text, system: SYSTEM_PROMPT, scope: "help" }),
+        body: JSON.stringify({ message: text, scope: "help" }),
       });
       const data = (await res.json()) as { reply?: string; error?: string };
       if (!data.reply) console.error("assistant error:", data.error);

@@ -7,6 +7,15 @@ import { checkRateLimit } from "../../../lib/rate-limit";
 
 const RATE_LIMIT_PER_MINUTE = 12;
 
+// System prompts are server-owned per scope, never taken from the request
+// body: a public caller could otherwise pass any `system` text alongside
+// a `scope` of its choosing and have the resulting answer persisted into
+// the shared cache under that scope, poisoning it for every later caller
+// of that scope without ever touching the secret-gated /api/answers POST.
+const SYSTEM_PROMPTS: Record<string, string> = {
+  help: "אתה עוזר שימוש קצר לאתר RealityScore. ענה רק על שאלות ניווט ושימוש באתר עצמו (איך לחפש, איך לכתוב ביקורת, איך להעלות תמונות) בעברית, בקצרה. אל תמציא מידע על עסקים או ציונים.",
+};
+
 // Single entry point for anything that needs an LLM reply (in-app help,
 // and later the voice assistant / phone webhook): check the answer bank
 // first, only call a provider on a miss, then cache the fresh answer.
@@ -14,13 +23,16 @@ const RATE_LIMIT_PER_MINUTE = 12;
 // `scope` (e.g. "help" vs "complaint-line") namespaces the cache via a
 // real column on answer_bank, so two different callers asking literally
 // the same words don't share an answer meant for a different context.
+// Only scopes with a registered system prompt above are accepted; anything
+// else falls back to the unscoped default.
 export async function POST(request: Request) {
   try {
-    const body = (await request.json()) as { message?: string; system?: string; scope?: string };
+    const body = (await request.json()) as { message?: string; scope?: string };
     const message = body.message?.trim() ?? "";
     if (!message) return Response.json({ error: "message is required" }, { status: 400 });
 
-    const scope = body.scope?.trim() || DEFAULT_SCOPE;
+    const requestedScope = body.scope?.trim() || DEFAULT_SCOPE;
+    const scope = requestedScope === DEFAULT_SCOPE || requestedScope in SYSTEM_PROMPTS ? requestedScope : DEFAULT_SCOPE;
     const db = getDb();
 
     // This route is publicly reachable and cache misses trigger paid LLM
@@ -51,8 +63,9 @@ export async function POST(request: Request) {
       );
     }
 
-    const messages = body.system
-      ? [{ role: "system" as const, content: body.system }, { role: "user" as const, content: message }]
+    const system = SYSTEM_PROMPTS[scope];
+    const messages = system
+      ? [{ role: "system" as const, content: system }, { role: "user" as const, content: message }]
       : [{ role: "user" as const, content: message }];
 
     const router = createLLMRouter(providers);
