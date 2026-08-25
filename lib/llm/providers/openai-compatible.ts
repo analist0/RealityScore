@@ -14,12 +14,15 @@ export function createOpenAICompatibleProvider(options: {
   fetchImpl?: typeof fetch;
 }): LLMProvider {
   const { name, baseUrl, apiKey, model, fetchImpl = fetch } = options;
+  const REQUEST_TIMEOUT_MS = 15000;
 
   return {
     name,
     async chat(request: ChatRequest): Promise<ChatResult> {
       let response: Response;
       try {
+        // Without a bound, a stalled provider would hang forever and the
+        // router would never reach the next provider in the fallback chain.
         response = await fetchImpl(`${baseUrl}/chat/completions`, {
           method: "POST",
           headers: {
@@ -32,6 +35,7 @@ export function createOpenAICompatibleProvider(options: {
             max_tokens: request.maxTokens,
             temperature: request.temperature,
           }),
+          signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
         });
       } catch (error) {
         throw new LLMProviderError(name, "network request failed", { cause: error });

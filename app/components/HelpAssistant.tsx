@@ -79,6 +79,19 @@ export function HelpAssistant({ nudge }: { nudge: boolean }) {
     }
   }
 
+  function closePanel() {
+    // A transcript can still arrive after the panel is closed (recognition
+    // keeps running until it's told to stop), which would otherwise fire a
+    // hidden ask() and speak a reply after the user thinks they left.
+    if (recognitionRef.current) {
+      recognitionRef.current.onresult = null;
+      recognitionRef.current.stop();
+      recognitionRef.current = null;
+    }
+    setListening(false);
+    setOpen(false);
+  }
+
   function startListening() {
     const Recognition = getSpeechRecognition();
     if (!Recognition) return;
@@ -101,7 +114,7 @@ export function HelpAssistant({ nudge }: { nudge: boolean }) {
     <div className={`help-assistant${nudge ? " nudge" : ""}`}>
       {open && (
         <section className="help-panel" role="dialog" aria-label="עזרה בשימוש באתר">
-          <header><strong>עזרה מהירה</strong><button className="close" onClick={() => setOpen(false)}>×</button></header>
+          <header><strong>עזרה מהירה</strong><button className="close" onClick={closePanel}>×</button></header>
           <p className="help-scope-note">עוזר זה עונה רק על שאלות ניווט ושימוש באתר.</p>
           <div className="help-log">
             {messages.length === 0 && <p className="help-empty">שאלו אותי בקול או בכתב איך להשתמש באתר — למשל &quot;איך כותבים ביקורת?&quot;</p>}

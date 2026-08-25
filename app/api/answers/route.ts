@@ -1,6 +1,14 @@
 import { env } from "cloudflare:workers";
 import { getDb } from "../../../db";
 import { DEFAULT_SCOPE, findCachedAnswer, recordAnswer } from "../../../db/answer-bank";
+import { checkRateLimit } from "../../../lib/rate-limit";
+
+// Cheaper than /api/assistant (no paid provider call), but still a full
+// per-scope table scan plus a hit-count write per match — an unbounded
+// unauthenticated caller could otherwise exhaust D1 read/write capacity
+// and skew hit-count analytics. Generous relative to the assistant route's
+// abuse-prevention limit since this path never reaches a paid provider.
+const GET_RATE_LIMIT_PER_MINUTE = 60;
 
 // Cache-first lookup for repeat questions: callers (chat widget, voice
 // assistant, phone webhook) check here BEFORE calling an LLM agent. A hit
@@ -18,6 +26,12 @@ export async function GET(request: Request) {
     const scope = url.searchParams.get("scope")?.trim() || DEFAULT_SCOPE;
 
     const db = getDb();
+    const clientIp = request.headers.get("cf-connecting-ip") ?? "unknown";
+    const withinLimit = await checkRateLimit(db, `answers-get:${clientIp}`, GET_RATE_LIMIT_PER_MINUTE);
+    if (!withinLimit) {
+      return Response.json({ error: "too many requests — try again in a moment" }, { status: 429 });
+    }
+
     const match = await findCachedAnswer(db, question, scope);
     if (!match) return Response.json({ cached: false });
     return Response.json({ cached: true, answer: match.answerText, audioObjectKey: match.audioObjectKey, score: match.score });

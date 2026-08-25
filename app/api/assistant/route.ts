@@ -6,6 +6,10 @@ import { createLLMRouter } from "../../../lib/llm/router";
 import { checkRateLimit } from "../../../lib/rate-limit";
 
 const RATE_LIMIT_PER_MINUTE = 12;
+// Bounds how much text gets forwarded to a paid provider per request — the
+// per-IP rate limit alone doesn't stop one permitted request from carrying
+// an arbitrarily large body up to the platform's HTTP limit.
+const MAX_MESSAGE_LENGTH = 1000;
 
 // System prompts are server-owned per scope, never taken from the request
 // body: a public caller could otherwise pass any `system` text alongside
@@ -30,6 +34,9 @@ export async function POST(request: Request) {
     const body = (await request.json()) as { message?: string; scope?: string };
     const message = body.message?.trim() ?? "";
     if (!message) return Response.json({ error: "message is required" }, { status: 400 });
+    if (message.length > MAX_MESSAGE_LENGTH) {
+      return Response.json({ error: `message too long — max ${MAX_MESSAGE_LENGTH} characters` }, { status: 400 });
+    }
 
     const requestedScope = body.scope?.trim() || DEFAULT_SCOPE;
     const scope = requestedScope === DEFAULT_SCOPE || requestedScope in SYSTEM_PROMPTS ? requestedScope : DEFAULT_SCOPE;
